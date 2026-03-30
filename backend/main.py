@@ -12,13 +12,13 @@ from fastapi.staticfiles import StaticFiles
 app = FastAPI()
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
-# Helper function: remove accents and normalize text
+
 def normalize_text(text):
     if not text:
         return ""
-    # Normalize to NFD form (decompose characters)
+    
     nfd = unicodedata.normalize('NFD', text)
-    # Remove combining marks (diacritics)
+    
     return ''.join(char for char in nfd if unicodedata.category(char) != 'Mn').lower()
 
 app.add_middleware(
@@ -33,16 +33,16 @@ Base.metadata.create_all(bind=engine)
 MAIN_ADMIN_USERNAME = "admin"
 MAIN_ADMIN_PASSWORD = "admin1"
 
-# Với DB cũ (đã chạy trước khi thêm `is_admin`), có thể chưa có cột này.
+
 def ensure_admin_column():
     try:
         with engine.begin() as conn:
             cols = conn.execute(text("PRAGMA table_info(users)")).fetchall()
-            col_names = [c[1] for c in cols]  # c[1] là tên cột
+            col_names = [c[1] for c in cols]  
             if "is_admin" not in col_names:
                 conn.execute(text("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0"))
     except Exception:
-        # Không phá app nếu không thể alter (thường do DB chưa tạo).
+        
         pass
 
 ensure_admin_column()
@@ -63,10 +63,10 @@ def ensure_photo_columns():
             if "is_favorite" not in col_names:
                 conn.execute(text("ALTER TABLE photos ADD COLUMN is_favorite INTEGER DEFAULT 0"))
 
-            # Chuẩn hóa dữ liệu cũ (nếu tồn tại giá trị NULL)
+            
             conn.execute(text("UPDATE photos SET is_favorite = 0 WHERE is_favorite IS NULL"))
     except Exception:
-        # Không phá app nếu không thể migrate.
+       
         pass
 
 ensure_photo_columns()
@@ -174,7 +174,7 @@ def upload_photo(
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # Nếu có album_id thì phải thuộc sở hữu của user đang đăng nhập
+   
     if album_id is not None:
         album = db.query(models.Album).filter(models.Album.id == album_id, models.Album.user_id == user.id).first()
         if not album:
@@ -296,7 +296,7 @@ def admin_revoke_admin(user_id: int, token: str, db: Session = Depends(get_db)):
 def admin_photos(token: str, db: Session = Depends(get_db)):
     require_admin_user(token, db)
 
-    # Thay vì trả chi tiết từng ảnh, chỉ trả tổng số ảnh mỗi user.
+    
     rows = (
         db.query(
             models.User.id.label("user_id"),
@@ -326,7 +326,7 @@ def admin_delete_photo(photo_id: int, token: str, db: Session = Depends(get_db))
     if not photo:
         raise HTTPException(status_code=404, detail="Photo not found")
 
-    # Nếu FK không bật cascade, xóa likes trước cho an toàn.
+    
     db.query(models.Like).filter(models.Like.photo_id == photo_id).delete(synchronize_session=False)
     db.delete(photo)
     db.commit()
@@ -343,21 +343,21 @@ def admin_delete_user(user_id: int, token: str, db: Session = Depends(get_db)):
     if is_master_admin(user):
         raise HTTPException(status_code=400, detail="Cannot delete main admin")
 
-    # Không cho admin tự xóa chính mình để tránh khóa hệ thống.
+    
     if user.id == admin.id:
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
 
-    # Lấy các ảnh của user
+   
     photos = db.query(models.Photo).filter(models.Photo.user_id == user.id).all()
     photo_ids = [p.id for p in photos]
 
     if photo_ids:
-        # Xóa likes trên các ảnh của user
+        
         db.query(models.Like).filter(models.Like.photo_id.in_(photo_ids)).delete(synchronize_session=False)
-        # Xóa bản ghi ảnh
+        
         db.query(models.Photo).filter(models.Photo.id.in_(photo_ids)).delete(synchronize_session=False)
 
-    # Xóa likes mà user đã thực hiện trên ảnh của người khác
+   
     db.query(models.Like).filter(models.Like.user_id == user.id).delete(synchronize_session=False)
 
     db.delete(user)
@@ -365,8 +365,7 @@ def admin_delete_user(user_id: int, token: str, db: Session = Depends(get_db)):
     return {"msg": "User deleted"}
 
 
-# NOTE: Route này cần đặt trước `GET /photos/{photo_id}` để tránh
-# việc FastAPI match nhầm chuỗi "favorites" vào tham số photo_id (int) => 422.
+
 @app.get("/photos/favorites")
 def get_favorite_photos_early(token: str, db: Session = Depends(get_db)):
     user = get_current_user(token, db)
